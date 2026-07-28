@@ -42,12 +42,58 @@ Nếu bạn cần thêm thông tin cụ thể hoặc kiến thức về sản ph
 * **Nhận xét**: An toàn nhưng không đầy đủ, chi tiết các thành phần với hàm lượng tương ứng, không có giá tiền và liều dùng để giải quyết được nhu cầu thực tế của người dùng.
 
 ### 🧠 ReAct Agent:
-* **Thought 1**: Cần bóc tách thành phần sản phẩm TPCN Ostelin Calcium & Vitamin D3.
-* **Action 1**: `search_products["Ostelin"]`
-* **Observation 1**: `{"success": True, "product_name": "Ostelin", "products": [{"product_id": "P001", "product_name": "Ostelin Calcium & Vitamin D3"}]}`
-* **Thought 2**: Đã tìm thấy sản phẩm P001, tiến hành tra cứu 100% chi tiết thành phần và giá tiền.
-* **Action 2**: `get_product_ingredients["P001"]`
-* **Observation 2**: `{"success": True, "product_name": "Ostelin Calcium & Vitamin D3", "ingredients": [{"ingredient_name": "Canxi (từ Calcium Carbonate)", "amount": "600", "unit": "mg"}, {"ingredient_name": "Vitamin D3", "amount": "500", "unit": "IU"}]}`
-* **Thought 3**: Đã có đủ thông tin chi tiết bóc tách từ cơ sở dữ liệu, tiến hành tổng hợp câu trả lời.
-* **Final Answer**: *"Sản phẩm Ostelin Calcium & Vitamin D3 (P001) gồm các thành phần chính: 600mg Canxi nguyên tố (từ Calcium Carbonate) và 500 IU Vitamin D3 per serving. Lưu ý: TPCN hỗ trợ sức khỏe xương, không có tác dụng thay thế thuốc chữa bệnh."*
-* **Nhận xét**: Hoàn thành xuất sắc nhiệm vụ nhờ sự kết hợp giữa suy luận từng bước và gọi đúng tool tra cứu dữ liệu TPCN thời gian thực.
+
+```text
+--- 🔄 Vòng lặp ReAct (Step 1/3) ---
+Thought: Tôi cần tìm thông tin chi tiết về sản phẩm sữa Ensure bổ sung Canxi & Vitamin.
+Action: search_products["Sữa Ensure bổ sung Canxi & Vitamin"]
+
+Observation:
+{
+  "success": true,
+  "product_name": "Sữa Ensure bổ sung Canxi & Vitamin",
+  "match_count": 1,
+  "products": [
+    {
+      "product_id": "P048",
+      "product_name": "Sữa Ensure bổ sung Canxi & Vitamin"
+    }
+  ]
+}
+```
+
+```text
+--- 🔄 Vòng lặp ReAct (Step 2/3) ---
+Thought: Tôi đã tìm thấy sản phẩm và sẽ tiếp tục lấy thông tin thành phần, giá và cách dùng để trả lời.
+Action: compare_products[["P048"]]
+
+Observation:
+{
+  "success": true,
+  "comparison_matrix": {
+    "requested_product_count": 1,
+    "matched_product_count": 1,
+    "ingredient_count": 6
+  },
+  "markdown_table": "| Tiêu chí | Sữa Ensure bổ sung Canxi & Vitamin |\n|---|---|\n| Mã sản phẩm | P048 |\n| Giá hộp | 750.000 VNĐ |\n| Liều dùng | 1-2 ly/ngày |\n| Cách dùng | Pha nước ấm |\n| Chống chỉ định | Dị ứng sữa bò |\n| Vitamin C | 30 mg |\n| Canxi | 500 mg |\n| Vitamin D3 | 200 IU |\n| Vitamin E | 15 IU |\n| Protein | 15 g |\n| Vitamin A | 1000 IU |"
+}
+```
+
+```text
+--- 🔄 Vòng lặp ReAct (Step 3/3) ---
+Final Answer:
+| Tiêu chí | Sữa Ensure bổ sung Canxi & Vitamin |
+|---|---|
+| Mã sản phẩm | P048 |
+| Giá hộp | 750.000 VNĐ |
+| Liều dùng | 1-2 ly/ngày |
+| Cách dùng | Pha nước ấm |
+| Chống chỉ định | Dị ứng sữa bò |
+| Vitamin C | 30 mg |
+| Canxi | 500 mg |
+| Vitamin D3 | 200 IU |
+| Vitamin E | 15 IU |
+| Protein | 15 g |
+| Vitamin A | 1000 IU |
+| Lưu ý | TPCN không phải thuốc; thiếu số khẩu phần/hộp nên không thể tính chi phí chính xác. |
+```

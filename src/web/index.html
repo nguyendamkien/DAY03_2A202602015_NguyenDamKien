@@ -646,9 +646,9 @@
         let src = String(text).replace(/\\n/g, '\n');
         
         // Render Markdown Pipe Tables
-        const tableRegex = /(?:(?:\|[^\n]+\|\r?\n){2,})/g;
+        const tableRegex = /(?:^[ \t]*\|.+?\|[ \t]*$(?:\r?\n)?){2,}/gm;
         let html = src.replace(tableRegex, (match) => {
-            const lines = match.trim().split('\n').map(l => l.trim());
+            const lines = match.trim().split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
             if (lines.length < 2) return match;
             
             let headerRow = lines[0];
@@ -693,6 +693,10 @@
             }
             let p = escapeHtml(part);
             p = p.replace(/&lt;br\s*\/?&gt;/gi, '<br>');
+            p = p.replace(/(?:^|\n)[ \t]*#{4}[ \t]+(.+)/g, '<br><h4 style="margin-top:10px;margin-bottom:6px;font-size:14px;font-weight:600;">$1</h4>');
+            p = p.replace(/(?:^|\n)[ \t]*#{3}[ \t]+(.+)/g, '<br><h3 style="margin-top:12px;margin-bottom:6px;font-size:15px;font-weight:600;">$1</h3>');
+            p = p.replace(/(?:^|\n)[ \t]*#{2}[ \t]+(.+)/g, '<br><h2 style="margin-top:14px;margin-bottom:6px;font-size:16px;font-weight:600;">$1</h2>');
+            p = p.replace(/(?:^|\n)[ \t]*#[ \t]+(.+)/g, '<br><h1 style="margin-top:16px;margin-bottom:6px;font-size:18px;font-weight:600;">$1</h1>');
             p = p.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             p = p.replace(/(?:^|\n)[ \t]*[-*][ \t]+(.+)/g, '<br>&bull; $1');
             p = p.replace(/(?:^|\n)[ \t]*(\d+)\.[ \t]+(.+)/g, '<br><strong>$1.</strong> $2');

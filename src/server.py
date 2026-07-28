@@ -114,6 +114,50 @@ def format_react_trace(res_dict: dict) -> dict:
     }
 
 
+def get_database_products():
+    """Return all aggregated supplement product records for Database UI tab."""
+    try:
+        from tools import _read_database
+        rows, path, warnings = _read_database()
+        
+        products_map = {}
+        for r in rows:
+            pid = r.get("product_id", "")
+            if not pid:
+                continue
+            if pid not in products_map:
+                products_map[pid] = {
+                    "product_id": pid,
+                    "product_name": r.get("product_name", ""),
+                    "price_vnd": r.get("price_vnd", ""),
+                    "usage": r.get("usage", "") or r.get("dosage", "") or "Standard",
+                    "contraindication": r.get("contraindication", ""),
+                    "raw_ingredients": []
+                }
+            ing_name = r.get("ingredient_name", "")
+            amount = r.get("amount", "")
+            unit = r.get("unit", "")
+            if ing_name:
+                if amount:
+                    products_map[pid]["raw_ingredients"].append(f"{ing_name} ({amount}{unit})")
+                else:
+                    products_map[pid]["raw_ingredients"].append(ing_name)
+                    
+        products_list = []
+        for p in products_map.values():
+            p["ingredients"] = ", ".join(p["raw_ingredients"])
+            del p["raw_ingredients"]
+            products_list.append(p)
+            
+        return {
+            "success": True,
+            "product_count": len(products_list),
+            "products": products_list
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "products": []}
+
+
 class RequestHandler(SimpleHTTPRequestHandler):
     """Custom HTTP Request Handler for API & Static Web UI"""
     
@@ -128,7 +172,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
                 cases = self.get_test_cases()
             self.send_json_response(cases)
         elif path == "/api/products":
-            db_res = load_product_database()
+            db_res = get_database_products()
             self.send_json_response(db_res)
         elif path == "/api/info":
             provider = get_llm_provider()

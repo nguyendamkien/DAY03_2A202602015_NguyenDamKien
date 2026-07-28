@@ -543,8 +543,6 @@ def _comparison_markdown(
             "Chống chỉ định",
             [product.get("contraindication") or "—" for product in products],
         ),
-        ("Chi phí mỗi liều", cost_values),
-        ("Chi phí mỗi ngày", cost_values),
     ]
 
     for label, values in fixed_rows:

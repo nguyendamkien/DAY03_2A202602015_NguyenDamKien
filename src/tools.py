@@ -8,6 +8,7 @@ import json
 import math
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -48,6 +49,17 @@ def _clean(value: Any) -> str:
     if value is None:
         return ""
     return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def _normalize_search_text(value: Any) -> str:
+    """Chuẩn hóa tên để tìm được khác biệt dấu, khoảng trắng và dấu câu."""
+    text = _clean(value).casefold().replace("đ", "d")
+    text = "".join(
+        character
+        for character in unicodedata.normalize("NFD", text)
+        if unicodedata.category(character) != "Mn"
+    )
+    return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
 def _error(message: str, **details: Any) -> dict[str, Any]:
@@ -274,10 +286,11 @@ def search_products(
     csv_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """
-    Tìm sản phẩm bằng cách khớp CHÍNH XÁC toàn bộ tên sản phẩm.
+    Tìm sản phẩm theo tên đã chuẩn hóa.
 
-    Không phân biệt chữ hoa/thường và bỏ qua khoảng trắng thừa ở đầu/cuối hoặc
-    giữa các từ. Không tìm gần đúng, không tìm theo ID/thương hiệu/link.
+    Không phân biệt hoa/thường, dấu tiếng Việt, dấu câu và cho phép một cụm tên
+    đặc trưng nằm trong tên đầy đủ (ví dụ ``Omega 3`` khớp ``Dầu cá Omega-3``).
+    Không suy diễn theo thương hiệu, URL hoặc độ tương đồng mơ hồ.
     """
     product_name = _clean(product_name)
     if not product_name:
@@ -288,13 +301,13 @@ def search_products(
     except (OSError, UnicodeError, csv.Error, ValueError) as exc:
         return _error(str(exc))
 
-    expected_name = product_name.casefold()
+    expected_name = _normalize_search_text(product_name)
     products: list[dict[str, str]] = []
     seen_ids: set[str] = set()
     for row in rows:
         product_id = row.get("product_id", "")
-        actual_name = _clean(row.get("product_name", "")).casefold()
-        if actual_name == expected_name and product_id not in seen_ids:
+        actual_name = _normalize_search_text(row.get("product_name", ""))
+        if expected_name in actual_name and product_id not in seen_ids:
             seen_ids.add(product_id)
             products.append(
                 {
@@ -499,18 +512,26 @@ def _comparison_markdown(
 
     cost_values: list[str] = []
     notes: list[str] = []
+    professional_note = (
+        " Nếu có bệnh nền hoặc đang dùng thuốc, hãy hỏi bác sĩ/dược sĩ "
+        "trước khi dùng."
+    )
     for product in products:
         cost = calculate_cost_per_serving(
             product["price_vnd"], product["servings_per_container"]
         )
         if cost.get("success"):
             cost_values.append(_format_vnd(cost["cost_per_serving_vnd"]))
-            notes.append("TPCN không phải thuốc và không thay thế thuốc chữa bệnh.")
+            notes.append(
+                "TPCN không phải thuốc và không thay thế thuốc chữa bệnh."
+                + professional_note
+            )
         else:
             cost_values.append("N/A — thiếu số khẩu phần/hộp")
             notes.append(
-                "TPCN không phải thuốc; thiếu số khẩu phần/hộp nên không thể "
-                "tính chi phí chính xác."
+                "TPCN không phải thuốc và không thay thế thuốc chữa bệnh; "
+                "thiếu số khẩu phần/hộp nên không thể tính chi phí chính xác."
+                + professional_note
             )
 
     fixed_rows = [

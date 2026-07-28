@@ -66,18 +66,17 @@ PROVIDER_ERROR_PATTERN = re.compile(
 MARKDOWN_SEPARATOR_PATTERN = re.compile(
     r"^\|(?:\s*:?-+:?\s*\|)+$",
 )
-REQUIRED_COMPARISON_ROWS = {
-    "Mã sản phẩm",
-    "Giá hộp",
-    "Liều dùng",
-    "Cách dùng",
-    "Chống chỉ định",
-    "Chi phí mỗi liều",
-    "Chi phí mỗi ngày",
-    "Lưu ý",
-}
-
-
+SENSITIVE_QUERY_PHRASES = (
+    "warfarin",
+    "chống đông",
+    "suy giảm miễn dịch",
+    "mang thai",
+    "cho con bú",
+    "chữa",
+    "điều trị",
+    "có sao không",
+    "nên uống loại nào",
+)
 def parse_action(response: str):
     """Parse đúng một dòng Action theo dạng ``tool_name[arg1, arg2]``."""
     if not isinstance(response, str):
@@ -126,18 +125,33 @@ def extract_single_markdown_table(text: str) -> str:
             "Final Answer phải chứa đúng một bảng Markdown gồm header, "
             "separator và ít nhất một hàng dữ liệu."
         )
-    table = valid_tables[0]
-    row_labels = {
-        row.split("|", 2)[1].strip()
-        for row in table[2:]
-        if row.count("|") >= 2
-    }
-    missing_rows = sorted(REQUIRED_COMPARISON_ROWS - row_labels)
-    if missing_rows:
-        raise ValueError(
-            "Bảng Markdown thiếu hàng bắt buộc: " + ", ".join(missing_rows)
-        )
-    return "\n".join(table)
+    return "\n".join(valid_tables[0])
+
+
+def validate_medical_safety(user_query: str, markdown_table: str) -> str:
+    """Bắt buộc bảng tư vấn nhạy cảm phải có ranh giới và chuyển tuyến y tế."""
+    query = str(user_query or "").casefold()
+    answer = str(markdown_table or "").casefold()
+    if any(phrase in query for phrase in SENSITIVE_QUERY_PHRASES):
+        if "bác sĩ" not in answer and "dược sĩ" not in answer:
+            raise ValueError(
+                "Bảng cho câu hỏi nhạy cảm phải yêu cầu hỏi bác sĩ/dược sĩ "
+                "trước khi lựa chọn hoặc sử dụng sản phẩm."
+            )
+    if "warfarin" in query or "chống đông" in query:
+        interaction_terms = ("tương tác", "ảnh hưởng", "chống chỉ định")
+        if not any(term in answer for term in interaction_terms):
+            raise ValueError(
+                "Bảng phải cảnh báo rõ nguy cơ tương tác/ảnh hưởng hoặc chống "
+                "chỉ định liên quan đến thuốc chống đông."
+            )
+    if "chữa" in query or "điều trị" in query:
+        if "không phải thuốc" not in answer and "không chữa" not in answer:
+            raise ValueError(
+                "Bảng không được ngụ ý TPCN chữa bệnh; cần ghi rõ TPCN "
+                "không phải thuốc hoặc không có tác dụng chữa bệnh."
+            )
+    return markdown_table
 
 
 def execute_tool(
@@ -269,6 +283,7 @@ def run_react_agent(user_query: str, provider) -> dict:
         if final_match and not action_matches:
             try:
                 final_answer = extract_single_markdown_table(final_match.group(1))
+                final_answer = validate_medical_safety(user_query, final_answer)
             except ValueError as exc:
                 observation = f"ERROR: {exc}"
             else:

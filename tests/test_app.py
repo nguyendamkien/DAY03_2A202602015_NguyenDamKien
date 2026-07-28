@@ -103,11 +103,71 @@ class AppBehaviorTests(unittest.TestCase):
 
         self.assertEqual(output.getvalue().count("| Tiêu chí | Ensure |"), 1)
 
-    def test_ingredient_only_table_is_rejected(self):
+    def test_ingredient_only_table_is_accepted(self):
         ingredient_only = "| Thành phần | Ensure |\n|---|---|\n| Canxi | 500 mg |"
 
-        with self.assertRaisesRegex(ValueError, "thiếu hàng bắt buộc"):
-            app.extract_single_markdown_table(ingredient_only)
+        self.assertEqual(
+            app.extract_single_markdown_table(ingredient_only),
+            ingredient_only,
+        )
+
+    def test_no_data_status_table_is_accepted(self):
+        status_table = (
+            "| Trạng thái | Kết quả |\n"
+            "|---|---|\n"
+            "| Dữ liệu | Không tìm thấy sản phẩm trong cơ sở dữ liệu. |"
+        )
+
+        self.assertEqual(app.extract_single_markdown_table(status_table), status_table)
+
+    def test_sensitive_query_retries_table_without_professional_referral(self):
+        unsafe_table = "| Lưu ý | Nội dung |\n|---|---|\n| An toàn | Không tự ý dùng. |"
+        safe_table = (
+            "| Lưu ý | Nội dung |\n"
+            "|---|---|\n"
+            "| An toàn | Có nguy cơ tương tác; hãy hỏi bác sĩ hoặc dược sĩ trước khi dùng. |"
+        )
+        provider = SequenceProvider([
+            f"Thought: done\nFinal Answer: {unsafe_table}",
+            f"Thought: fixed\nFinal Answer: {safe_table}",
+        ])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = app.run_react_agent(
+                "Tôi đang dùng warfarin, sản phẩm này có sao không?",
+                provider,
+            )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["iterations"], 2)
+        self.assertEqual(result["final_answer"], safe_table)
+        self.assertIn("bác sĩ/dược sĩ", provider.calls[1][0])
+
+    def test_anticoagulant_query_requires_explicit_interaction_warning(self):
+        incomplete_table = (
+            "| Lưu ý | Nội dung |\n"
+            "|---|---|\n"
+            "| An toàn | Hãy hỏi bác sĩ trước khi dùng Canxi. |"
+        )
+        complete_table = (
+            "| Lưu ý | Nội dung |\n"
+            "|---|---|\n"
+            "| An toàn | Canxi có thể tương tác với thuốc chống đông; hãy hỏi bác sĩ. |"
+        )
+        provider = SequenceProvider([
+            f"Thought: done\nFinal Answer: {incomplete_table}",
+            f"Thought: fixed\nFinal Answer: {complete_table}",
+        ])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = app.run_react_agent(
+                "Tôi đang dùng thuốc chống đông, uống Canxi có sao không?",
+                provider,
+            )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["iterations"], 2)
+        self.assertIn("tương tác", result["final_answer"])
 
     def test_json_escaped_newlines_are_rendered_as_markdown_lines(self):
         escaped_table = VALID_TABLE.replace("\n", r"\n")

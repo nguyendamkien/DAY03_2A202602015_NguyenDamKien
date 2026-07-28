@@ -1,0 +1,50 @@
+flowchart TD
+    %% Styling
+    classDef startNode fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:2px;
+    classDef routerNode fill:#D97706,color:#fff,stroke:#B45309,stroke-width:2px;
+    classDef chatbotPath fill:#2563EB,color:#fff,stroke:#1D4ED8,stroke-width:2px;
+    classDef reactPath fill:#9333EA,color:#fff,stroke:#7E22CE,stroke-width:2px;
+    classDef toolNode fill:#059669,color:#fff,stroke:#047857,stroke-width:2px;
+    classDef guardrailNode fill:#DC2626,color:#fff,stroke:#B91C1C,stroke-width:2px;
+    classDef outputNode fill:#16A34A,color:#fff,stroke:#15803D,stroke-width:2px;
+
+    %% Workflow Steps
+    Start(["📥 User Query / Input Question"]):::startNode --> Router{"🔀 Phân Loại Khả Năng (Intent Router)"}:::routerNode
+
+    %% Branch 1: Chatbot Path (Simple Query)
+    Router -- "Câu hỏi Q&A đơn giản / Lý thuyết chung" --> ChatbotPath["💬 Chatbot Path (LLM Baseline)"]:::chatbotPath
+    ChatbotPath --> ChatbotLLM["🧠 Sinh phản hồi trực tiếp từ kiến thức tĩnh"]:::chatbotPath
+    ChatbotLLM --> OutputResponse
+
+    %% Branch 2: ReAct Agent Path (Complex / Grounded Data)
+    Router -- "Cần tra cứu TPCN, Bóc tách thành phần, So sánh giá & Liều dùng" --> ReActPath["🧠 ReAct Agent Path Loop"]:::reactPath
+    
+    subgraph ReActLoop ["🔄 Vòng Lặp ReAct (Thought ➔ Action ➔ Observation)"]
+        ReActPath --> ThoughtStep["💭 Thought: Suy luận bước tiếp theo cần làm"]:::reactPath
+        ThoughtStep --> ActionStep{"🛠️ Action: Gọi công cụ tra cứu TPCN"}:::reactPath
+        
+        %% Tools Subgraph
+        subgraph ToolRegistry ["🛠️ Tool Registry (Cơ sở dữ liệu TPCN)"]
+            ActionStep --> Tool1["search_products(name)"]:::toolNode
+            ActionStep --> Tool2["get_product_ingredients(id)"]:::toolNode
+            ActionStep --> Tool3["build_comparison_matrix(ids)"]:::toolNode
+            ActionStep --> Tool4["calculate_cost_per_serving(price, servings)"]:::toolNode
+            ActionStep --> Tool5["compare_products(ids)"]:::toolNode
+        end
+
+        Tool1 --> Observation["👁️ Observation: Nhận dữ liệu thực tế từ Database/CSV"]:::toolNode
+        Tool2 --> Observation
+        Tool3 --> Observation
+        Tool4 --> Observation
+        Tool5 --> Observation
+
+        Observation --> CheckComplete{"❓ Đã đủ dữ liệu trả lời chưa?"}:::reactPath
+        CheckComplete -- "Chưa đủ dữ liệu" --> CheckGuardrail{"🛡️ Giới hạn MAX_ITERATIONS (<= 5)"}:::guardrailNode
+        CheckGuardrail -- "Còn Budget (Step < 5)" --> ThoughtStep
+        CheckGuardrail -- "Chạm Ngưỡng (Step >= 5)" --> SafeFallback["🛡️ Guardrail Triggered: Ngắt lặp an toàn & Trả lời Lịch sự"]:::guardrailNode
+    end
+
+    CheckComplete -- "Đã đủ dữ liệu" --> FinalAnswer["🏁 Final Answer: Trích dẫn chứng cứ + Bảng Markdown + Disclaimers Y tế"]:::outputNode
+    
+    SafeFallback --> OutputResponse
+    FinalAnswer --> OutputResponse(["📤 Output: Trả phản hồi hoàn chỉnh cho Người dùng"]):::outputNode

@@ -51,3 +51,49 @@ Nếu bạn cần thêm thông tin cụ thể hoặc kiến thức về sản ph
 * **Thought 3**: Đã có đủ thông tin chi tiết bóc tách từ cơ sở dữ liệu, tiến hành tổng hợp câu trả lời.
 * **Final Answer**: *"Sản phẩm Ostelin Calcium & Vitamin D3 (P001) gồm các thành phần chính: 600mg Canxi nguyên tố (từ Calcium Carbonate) và 500 IU Vitamin D3 per serving. Lưu ý: TPCN hỗ trợ sức khỏe xương, không có tác dụng thay thế thuốc chữa bệnh."*
 * **Nhận xét**: Hoàn thành xuất sắc nhiệm vụ nhờ sự kết hợp giữa suy luận từng bước và gọi đúng tool tra cứu dữ liệu TPCN thời gian thực.
+
+---
+
+## 📊 3. SƠ ĐỒ HỆ THỐNG HYBRID (DECISION FLOWCHART)
+
+Xem file sơ đồ đầy đủ tại: [`docs/hybrid_flowchart.mermaid`](file:///c:/Users/Namdr/Downloads/DAY03-2A202601973/docs/hybrid_flowchart.mermaid)
+
+```mermaid
+flowchart TD
+    Start(["📥 User Query / Input Question"]) --> Router{"🔀 Phân Loại Khả Năng (Intent Router)"}
+
+    %% Chatbot Path
+    Router -- "Q&A đơn giản / Lý thuyết chung" --> ChatbotPath["💬 Chatbot Path (LLM Baseline)"]
+    ChatbotPath --> ChatbotLLM["🧠 Sinh phản hồi trực tiếp từ kiến thức tĩnh"]
+    ChatbotLLM --> OutputResponse
+
+    %% ReAct Agent Path
+    Router -- "Cần tra cứu TPCN, Bóc tách thành phần, So sánh giá & Liều dùng" --> ReActPath["🧠 ReAct Agent Path Loop"]
+    
+    subgraph ReActLoop ["🔄 Vòng Lặp ReAct (Thought ➔ Action ➔ Observation)"]
+        ReActPath --> ThoughtStep["💭 Thought: Suy luận bước tiếp theo"]
+        ThoughtStep --> ActionStep{"🛠️ Action: Gọi công cụ tra cứu TPCN"}
+        
+        ActionStep --> Tool1["search_products"]
+        ActionStep --> Tool2["get_product_ingredients"]
+        ActionStep --> Tool3["build_comparison_matrix"]
+        ActionStep --> Tool4["calculate_cost_per_serving"]
+        ActionStep --> Tool5["compare_products"]
+
+        Tool1 --> Observation["👁️ Observation: Nhận dữ liệu thực tế từ Database"]
+        Tool2 --> Observation
+        Tool3 --> Observation
+        Tool4 --> Observation
+        Tool5 --> Observation
+
+        Observation --> CheckComplete{"❓ Đã đủ dữ liệu chưa?"}
+        CheckComplete -- "Chưa đủ" --> CheckGuardrail{"🛡️ MAX_ITERATIONS (<= 5)"}
+        CheckGuardrail -- "Step < 5" --> ThoughtStep
+        CheckGuardrail -- "Step >= 5" --> SafeFallback["🛡️ Guardrail Triggered: Ngắt lặp an toàn"]
+    end
+
+    CheckComplete -- "Đã đủ dữ liệu" --> FinalAnswer["🏁 Final Answer: Trích dẫn chứng cứ + Bảng Markdown + Disclaimer"]
+    
+    SafeFallback --> OutputResponse
+    FinalAnswer --> OutputResponse(["📤 Output: Trả phản hồi hoàn chỉnh cho Người dùng"])
+```
